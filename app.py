@@ -10,13 +10,15 @@ from dotenv import load_dotenv
 import json
 from datetime import datetime
 
-# Adicionar diretório src ao path
+# Adicionar diretório src ao path ANTES das importações
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from rag_engine import PayrollRAGEngine
-from llm_interface import LLMInterface
-from conversation_manager import ConversationManager
+# Importações dos módulos locais
 from intent_classifier import IntentClassifier
+from conversation_manager import ConversationManager
+from llm_interface import LLMInterface
+from rag_engine import PayrollRAGEngine
+
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -34,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 # Configuração da página
 st.set_page_config(
-    page_title="Chatbot de Folha de Pagamento",
+    page_title="Chatbot",
     page_icon="💼",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -103,10 +105,10 @@ def initialize_session_state():
     """Inicializa o estado da sessão."""
     if 'conversation' not in st.session_state:
         st.session_state.conversation = ConversationManager()
-    
+
     if 'intent_classifier' not in st.session_state:
         st.session_state.intent_classifier = IntentClassifier()
-    
+
     if 'message_count' not in st.session_state:
         st.session_state.message_count = 0
 
@@ -114,11 +116,11 @@ def initialize_session_state():
 def display_chat_history():
     """Exibe o histórico de conversação."""
     messages = st.session_state.conversation.get_messages()
-    
+
     for msg in messages:
         role = msg['role']
         content = msg['content']
-        
+
         if role == 'user':
             st.markdown(f"""
             <div class="chat-message user-message">
@@ -140,30 +142,32 @@ def process_query(query: str, rag_engine: PayrollRAGEngine, llm: LLMInterface):
     try:
         # Classificar intenção
         intent, confidence = st.session_state.intent_classifier.classify(query)
-        logger.info(f"Query: '{query}' | Intent: {intent} | Confidence: {confidence:.2f}")
-        
+        logger.info(
+            f"Query: '{query}' | Intent: {intent} | Confidence: {confidence:.2f}")
+
         # Adicionar mensagem do usuário
         st.session_state.conversation.add_message('user', query)
-        
+
         # Processar baseado na intenção
         context = []
-        
+
         if intent == IntentClassifier.INTENT_PAYROLL:
             # Buscar no RAG
             context = rag_engine.search(query, top_k=3)
             logger.info(f"RAG encontrou {len(context)} resultados")
-        
+
         elif intent == IntentClassifier.INTENT_STATS:
             # Retornar estatísticas
             stats = rag_engine.get_statistics()
             response = format_statistics(stats)
-            st.session_state.conversation.add_message('assistant', response, {'stats': stats})
+            st.session_state.conversation.add_message(
+                'assistant', response, {'stats': stats})
             return
-        
+
         # Gerar resposta do LLM
         messages = st.session_state.conversation.get_messages()
         response = llm.generate_response(messages, context)
-        
+
         # Adicionar resposta ao histórico
         metadata = {
             'intent': intent,
@@ -172,10 +176,11 @@ def process_query(query: str, rag_engine: PayrollRAGEngine, llm: LLMInterface):
         }
         if context:
             metadata['sources'] = [c['row_index'] for c in context]
-        
-        st.session_state.conversation.add_message('assistant', response, metadata)
+
+        st.session_state.conversation.add_message(
+            'assistant', response, metadata)
         st.session_state.message_count += 1
-        
+
     except Exception as e:
         logger.error(f"Erro ao processar query: {e}", exc_info=True)
         error_msg = f"Desculpe, ocorreu um erro ao processar sua mensagem: {str(e)}"
@@ -186,7 +191,7 @@ def format_statistics(stats: dict) -> str:
     """Formata estatísticas do dataset."""
     def fmt_money(val):
         return f"R$ {float(val):,.2f}".replace(',', '_').replace('.', ',').replace('_', '.')
-    
+
     response = "📊 **Estatísticas do Dataset de Folha de Pagamento:**\n\n"
     response += f"• Total de Registros: {stats['total_records']}\n"
     response += f"• Funcionários Únicos: {stats['unique_employees']}\n"
@@ -195,29 +200,30 @@ def format_statistics(stats: dict) -> str:
     response += f"• Maior Pagamento: {fmt_money(stats['max_net_pay'])}\n"
     response += f"• Menor Pagamento: {fmt_money(stats['min_net_pay'])}\n"
     response += f"• Total Pago (período): {fmt_money(stats['total_paid'])}\n"
-    
+
     return response
 
 
 def main():
     """Função principal da aplicação."""
     # Header
-    st.markdown('<div class="main-header">💼 Chatbot de Folha de Pagamento</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">💼 Chatbot de Folha de Pagamento</div>',
+                unsafe_allow_html=True)
     st.markdown("---")
-    
+
     # Inicializar componentes
     initialize_session_state()
     rag_engine = initialize_rag_engine()
     llm = initialize_llm()
-    
+
     if not rag_engine or not llm:
         st.error("Erro ao inicializar o sistema. Verifique os logs.")
         return
-    
+
     # Sidebar
     with st.sidebar:
         st.header("⚙️ Configurações")
-        
+
         # Informações do sistema
         st.subheader("📊 Status do Sistema")
         st.info(f"""
@@ -225,31 +231,32 @@ def main():
         **Mensagens:** {st.session_state.message_count}  
         **Histórico:** {len(st.session_state.conversation.get_messages())}
         """)
-        
+
         # Estatísticas do dataset
         if st.button("📈 Ver Estatísticas"):
             stats = rag_engine.get_statistics()
             st.markdown('<div class="stats-card">', unsafe_allow_html=True)
             st.markdown(format_statistics(stats))
             st.markdown('</div>', unsafe_allow_html=True)
-        
+
         # Exportar conversa
         if st.button("💾 Exportar Conversa"):
             conversation_data = st.session_state.conversation.export_conversation()
-            json_str = json.dumps(conversation_data, indent=2, ensure_ascii=False)
+            json_str = json.dumps(
+                conversation_data, indent=2, ensure_ascii=False)
             st.download_button(
                 label="📥 Download JSON",
                 data=json_str,
                 file_name=f"conversa_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                 mime="application/json"
             )
-        
+
         # Limpar histórico
         if st.button("🗑️ Limpar Histórico"):
             st.session_state.conversation.clear()
             st.session_state.message_count = 0
             st.rerun()
-        
+
         # Ajuda
         st.markdown("---")
         st.subheader("💡 Exemplos de Perguntas")
@@ -260,18 +267,18 @@ def main():
         - Quais os descontos de INSS da Ana?
         - Quando foi o pagamento de abril?
         """)
-    
+
     # Área principal
     col1, col2 = st.columns([3, 1])
-    
+
     with col1:
         st.subheader("💬 Conversa")
-        
+
         # Container para o chat
         chat_container = st.container()
         with chat_container:
             display_chat_history()
-        
+
         # Input do usuário
         with st.form(key='message_form', clear_on_submit=True):
             user_input = st.text_input(
@@ -280,22 +287,22 @@ def main():
                 key='user_input'
             )
             submit_button = st.form_submit_button("Enviar 📤")
-            
+
             if submit_button and user_input:
                 with st.spinner("Processando..."):
                     process_query(user_input, rag_engine, llm)
                 st.rerun()
-    
+
     with col2:
         st.subheader("📋 Metadados")
-        
+
         # Mostrar metadados da última interação
         metadata = st.session_state.conversation.get_last_metadata()
         if metadata:
             st.json(metadata)
         else:
             st.info("Nenhuma mensagem ainda")
-    
+
     # Footer
     st.markdown("---")
     st.markdown("""
@@ -306,4 +313,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()
