@@ -23,6 +23,14 @@ Um chatbot inteligente construído com **Streamlit** que combina conversação g
 - ✅ **Classificação de intenções**: Roteamento inteligente de queries
 - ✅ **Formatação monetária**: Valores em formato brasileiro (R$ X.XXX,XX)
 
+### Funcionalidades de Precisão (✅ Implementado)
+- ✅ **Filtros inteligentes por funcionário**: Respostas precisas quando especificado um nome
+- ✅ **Filtros inteligentes por mês**: Suporte a nomes completos e abreviações (jan, fev, mar, etc.)
+- ✅ **Respostas para múltiplos funcionários**: Mostra ambos (Ana e Bruno) quando não especificado nome
+- ✅ **Detecção de campos específicos**: Respostas precisas para INSS, IRRF, bônus, salário
+- ✅ **Boosting de relevância**: Prioriza resultados por funcionário e mês específicos
+- ✅ **Conversação natural**: Respostas amigáveis e variadas para conversa geral
+
 ## 📁 Estrutura do Projeto
 
 ```
@@ -123,19 +131,32 @@ pytest tests/test_rag_engine.py -v
 - Qual o salário líquido da Ana em março?
 - Mostre os pagamentos do Bruno Lima
 - Quanto a Ana recebeu em maio de 2025?
+- Qual foi o desconto de INSS da Ana em jun/2025?
+- Mostre o bônus do Bruno em abril
 ```
 
-**Consultas sobre componentes:**
+**Consultas sem especificar funcionário (mostra ambos):**
+```
+- Quanto recebi (líquido) em maio/2025
+- Qual foi o desconto de INSS em junho de 2025?
+- Mostre os bônus de março
+- Quais os salários de abril?
+```
+
+**Consultas sobre componentes específicos:**
 ```
 - Qual foi o bônus em maio de 2025?
 - Quais os descontos de INSS da Ana?
 - Mostre os benefícios (VT/VR) do Bruno
+- Qual o desconto de IRRF em jun/2025?
 ```
 
-**Consultas sobre datas:**
+**Consultas sobre datas (suporte a abreviações):**
 ```
 - Quando foi o pagamento de abril?
-- Mostre a data de pagamento da Ana em junho
+- Mostre a data de pagamento da Ana em jun
+- Pagamentos de mar/2025
+- Data de pagamento em fev
 ```
 
 **Estatísticas gerais:**
@@ -151,6 +172,8 @@ pytest tests/test_rag_engine.py -v
 - Ajuda
 - O que você pode fazer?
 - Obrigado
+- Como está o tempo?
+- Fale sobre futebol
 ```
 
 ## 🏗️ Decisões Técnicas
@@ -171,6 +194,9 @@ pytest tests/test_rag_engine.py -v
 - Método: Similaridade cosseno entre embeddings
 - Top-K configurável (padrão: 3 resultados)
 - Threshold mínimo para garantir relevância
+- **Boosting inteligente**: +0.1 para mês específico, +0.15 para funcionário específico
+- **Filtros em cascata**: Primeiro por funcionário, depois por mês
+- **Agrupamento por funcionário**: Para consultas sem nome específico
 
 ### 2. LLM Interface
 
@@ -210,7 +236,26 @@ pytest tests/test_rag_engine.py -v
 - Export JSON para análise
 - Metadados visíveis (intent, confidence, sources)
 
-### 5. Testes
+### 5. Melhorias de Precisão
+
+**Filtros Inteligentes:**
+- **Extração de funcionário**: Detecta "Ana", "Bruno", "Ana Souza", "Bruno Lima"
+- **Extração de mês**: Suporta nomes completos e abreviações (jan, fev, mar, abr, mai, jun, jul, ago, set, out, nov, dez)
+- **Filtros em cascata**: Primeiro filtra por funcionário, depois por mês
+- **Fallback inteligente**: Se não encontrar resultados filtrados, usa contexto completo
+
+**Detecção de Campos Específicos:**
+- **Campos detectados**: INSS, IRRF, bônus, salário, benefícios, pagamento líquido
+- **Resposta única**: Para campos específicos, retorna apenas o melhor resultado
+- **Formatação especializada**: Emojis e formatação específica para cada tipo de campo
+
+**Respostas para Múltiplos Funcionários:**
+- **Sem nome específico**: Mostra informações de ambos os funcionários
+- **Com nome específico**: Mostra apenas o funcionário solicitado
+- **Agrupamento inteligente**: Organiza resultados por funcionário
+- **Mensagens contextuais**: Diferencia entre resposta única e múltipla
+
+### 6. Testes
 
 **Estratégia:**
 - Testes unitários para componentes isolados
@@ -255,6 +300,12 @@ pytest tests/test_rag_engine.py -v
 - **Queries**: <1 segundo após inicialização
 - **Escalabilidade**: Adequado para uso individual/pequeno time
 - **Produção**: Considerar cache de embeddings em banco vetorial
+
+### 8. Filtros de Precisão
+- **Funcionários**: Suporta apenas "Ana" e "Bruno" (Ana Souza, Bruno Lima)
+- **Meses**: Suporta nomes completos e abreviações padrão
+- **Extensão**: Adicionar mais funcionários requer atualização do código
+- **Limitação**: Não suporta variações como "João Silva" automaticamente
 
 ## 🧪 Cobertura de Testes
 
@@ -399,6 +450,10 @@ docker run -p 8501:8501 payroll-chatbot
 ## 📈 Melhorias Futuras
 
 ### Curto Prazo
+- [x] ~~Filtros inteligentes por funcionário e mês~~ ✅ **Implementado**
+- [x] ~~Respostas precisas para campos específicos~~ ✅ **Implementado**
+- [x] ~~Suporte a abreviações de meses~~ ✅ **Implementado**
+- [x] ~~Respostas para múltiplos funcionários~~ ✅ **Implementado**
 - [ ] Adicionar mais funcionários ao dataset
 - [ ] Implementar cache de embeddings em disco
 - [ ] Adicionar gráficos de visualização de dados
@@ -409,12 +464,16 @@ docker run -p 8501:8501 payroll-chatbot
 - [ ] Implementar histórico persistente (banco de dados)
 - [ ] Adicionar autenticação de usuários
 - [ ] Dashboard de analytics
+- [ ] Suporte a mais variações de nomes de funcionários
+- [ ] Filtros por período (trimestre, semestre, ano)
 
 ### Longo Prazo
 - [ ] Multitenancy (múltiplas empresas)
 - [ ] Integração com sistemas de folha reais
 - [ ] API REST para integração externa
 - [ ] App mobile
+- [ ] Análise preditiva de folha de pagamento
+- [ ] Integração com sistemas de RH
 
 ## 🤝 Contribuindo
 
@@ -442,4 +501,13 @@ Desenvolvido como projeto de demonstração de RAG + Chatbot.
 
 ---
 
-**💼 Chatbot de Folha de Pagamento v1.0** | Powered by RAG + Streamlit 
+**💼 Chatbot de Folha de Pagamento v2.0** | Powered by RAG + Streamlit
+
+### 🆕 Novidades da v2.0
+- ✅ **Filtros inteligentes** por funcionário e mês
+- ✅ **Respostas precisas** para campos específicos (INSS, IRRF, bônus)
+- ✅ **Suporte a abreviações** de meses (jan, fev, mar, etc.)
+- ✅ **Respostas para múltiplos funcionários** quando não especificado nome
+- ✅ **Boosting de relevância** para resultados mais precisos
+- ✅ **Conversação natural** e amigável
+- ✅ **Formatação melhorada** com emojis e estrutura clara 

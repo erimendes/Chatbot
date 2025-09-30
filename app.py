@@ -10,15 +10,29 @@ from dotenv import load_dotenv
 import json
 from datetime import datetime
 
-# Adicionar diretório src ao path ANTES das importações
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+# Configuração robusta do path para módulos locais
+current_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.join(current_dir, 'src')
+
+# Adicionar src ao path se não estiver presente
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
+
+# Verificar se o diretório src existe
+if not os.path.exists(src_dir):
+    st.error(f"❌ Diretório 'src' não encontrado em: {src_dir}")
+    st.stop()
 
 # Importações dos módulos locais
-from intent_classifier import IntentClassifier
-from conversation_manager import ConversationManager
-from llm_interface import LLMInterface
-from rag_engine import PayrollRAGEngine
-
+try:
+    from src.intent_classifier import IntentClassifier
+    from src.conversation_manager import ConversationManager
+    from src.llm_interface import LLMInterface
+    from src.rag_engine import PayrollRAGEngine
+except ImportError as e:
+    st.error(f"❌ Erro ao importar módulos: {e}")
+    st.error(f"📁 Path atual: {sys.path[:3]}...")
+    st.stop()
 
 # Carregar variáveis de ambiente
 load_dotenv()
