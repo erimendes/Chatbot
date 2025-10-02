@@ -1,3 +1,4 @@
+# src/intent_classifier.py
 """
 Classificador de intenções para roteamento de queries.
 """

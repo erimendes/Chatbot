@@ -1,3 +1,4 @@
+# src/conversation_manager.py
 """
 Gerenciador de conversação com memória de contexto.
 """

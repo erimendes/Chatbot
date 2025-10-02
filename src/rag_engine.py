@@ -1,3 +1,4 @@
+# src/rag_engine.py
 """
 Motor RAG para consultas de folha de pagamento.
 Implementa embeddings, chunking, ranking e recuperação de informações.
