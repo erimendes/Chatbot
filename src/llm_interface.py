@@ -36,7 +36,11 @@ class LLMInterface:
         """
         chat_log = ""
         if context:
-            chat_log += "Informações relevantes encontradas:\n"
+            # chat_log += "Informações relevantes encontradas:\n"
+            chat_log += (
+                "Informações relevantes encontradas (considere todos os meses relevantes e, quando a pergunta for sobre trimestres, use os seguintes períodos: "
+                "1º trimestre = jan-fev-mar, 2º = abr-mai-jun, 3º = jul-ago-set, 4º = out-nov-dez):\n"
+            )
             for i, c in enumerate(context, 1):
                 if 'text' in c:
                     chat_log += f"{i}. {c['text']}\n"

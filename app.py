@@ -1,3 +1,4 @@
+# app.py
 """
 Chatbot de Folha de Pagamento com RAG
 Aplicação Streamlit com conversação geral e consultas especializadas.
@@ -9,6 +10,7 @@ import streamlit as st
 from dotenv import load_dotenv
 import json
 from datetime import datetime
+import re
 
 # Configuração robusta do path para módulos locais
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -154,6 +156,14 @@ def display_chat_history():
 def process_query(query: str, rag_engine: PayrollRAGEngine, llm: LLMInterface):
     """Processa a query do usuário."""
     try:
+        # ⚡️ Interceptar se é uma pergunta sobre trimestres
+        resposta_trimestre = responder_trimestre(query, rag_engine, llm)
+        if resposta_trimestre:
+            st.session_state.conversation.add_message('user', query)
+            st.session_state.conversation.add_message('assistant', resposta_trimestre)
+            st.session_state.message_count += 1
+            return
+
         # Classificar intenção
         intent, confidence = st.session_state.intent_classifier.classify(query)
         logger.info(
@@ -166,12 +176,10 @@ def process_query(query: str, rag_engine: PayrollRAGEngine, llm: LLMInterface):
         context = []
 
         if intent == IntentClassifier.INTENT_PAYROLL:
-            # Buscar no RAG
             context = rag_engine.search(query, top_k=3)
             logger.info(f"RAG encontrou {len(context)} resultados")
 
         elif intent == IntentClassifier.INTENT_STATS:
-            # Retornar estatísticas
             stats = rag_engine.get_statistics()
             response = format_statistics(stats)
             st.session_state.conversation.add_message(
@@ -199,7 +207,6 @@ def process_query(query: str, rag_engine: PayrollRAGEngine, llm: LLMInterface):
         logger.error(f"Erro ao processar query: {e}", exc_info=True)
         error_msg = f"Desculpe, ocorreu um erro ao processar sua mensagem: {str(e)}"
         st.session_state.conversation.add_message('assistant', error_msg)
-
 
 def format_statistics(stats: dict) -> str:
     """Formata estatísticas do dataset."""
@@ -324,6 +331,69 @@ def main():
         <small>Chatbot de Folha de Pagamento v1.0 | Powered by RAG + Streamlit</small>
     </div>
     """, unsafe_allow_html=True)
+
+def responder_trimestre(query: str, rag_engine: PayrollRAGEngine, llm: LLMInterface) -> str:
+    """
+    Detecta perguntas sobre trimestres e responde com detalhamento.
+    """
+    info = detectar_trimestre(query)
+
+    if not info:
+        return None  # não identificou dados suficientes
+
+    nome = info['nome']
+    ano = info['ano']
+    trimestre = info['trimestre']
+
+    # Usa a função especializada do RAG
+    prompt = rag_engine.gerar_relatorio_trimestral(nome, ano, trimestre)
+
+    messages = [{"role": "user", "content": prompt}]
+    resposta = llm.generate_response(messages)
+    return resposta
+
+
+def detectar_trimestre(query: str) -> dict:
+    """
+    Detecta menção a trimestre na query do usuário.
+    Retorna dict com 'trimestre', 'ano' e 'nome', se encontrados.
+    """
+    query_lower = query.lower()
+
+    # Mapear ordinal -> número do trimestre
+    map_trimestre = {
+        "primeiro": 1, "1º": 1, "1o": 1, "1": 1,
+        "segundo": 2, "2º": 2, "2o": 2, "2": 2,
+        "terceiro": 3, "3º": 3, "3o": 3, "3": 3,
+        "quarto": 4, "4º": 4, "4o": 4, "4": 4
+    }
+
+    trimestre_detectado = None
+    for palavra, numero in map_trimestre.items():
+        if re.search(rf"\b{palavra}\b", query_lower) and "trimestre" in query_lower:
+            trimestre_detectado = numero
+            break
+
+    # Detectar ano (2024, 2025, etc)
+    ano_match = re.search(r"(20\d{2})", query)
+    ano = ano_match.group(1) if ano_match else datetime.now().year
+
+    # Detectar nome do funcionário (simples: procura nome que já está no dataset)
+    nome = None
+    nomes_possiveis = ["ana", "bruno", "souza", "lima"]
+    for n in nomes_possiveis:
+        if n in query_lower:
+            nome = n.title() if n not in ["souza", "lima"] else "Ana Souza" if n == "souza" else "Bruno Lima"
+            break
+
+    if trimestre_detectado and nome:
+        return {
+            "trimestre": trimestre_detectado,
+            "ano": str(ano),
+            "nome": nome
+        }
+    else:
+        return {}
 
 
 if __name__ == "__main__":

@@ -361,3 +361,46 @@ class PayrollRAGEngine:
             'min_net_pay': float(self.df['net_pay'].min()),
             'total_paid': float(self.df['net_pay'].sum()),
         }
+
+    # 👇 Adicione aqui dentro da classe
+    def gerar_relatorio_trimestral(self, nome: str, ano: str, trimestre: int) -> str:
+        df_filtrado = self._filtrar_por_trimestre(nome, ano, trimestre)
+
+        nomes_meses = {
+            '01': 'janeiro', '02': 'fevereiro', '03': 'março',
+            '04': 'abril', '05': 'maio', '06': 'junho',
+            '07': 'julho', '08': 'agosto', '09': 'setembro',
+            '10': 'outubro', '11': 'novembro', '12': 'dezembro'
+        }
+
+        detalhes = ""
+        total = 0.0
+
+        for _, row in df_filtrado.iterrows():
+            comp = row['competency']
+            _, mes = comp.split('-')
+            net = row['net_pay']
+            total += net
+            mes_nome = nomes_meses.get(mes, mes)
+            detalhes += f"\n- {mes_nome}: R$ {net:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+        total_fmt = f"R$ {total:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+        prompt = (
+            f"Com base nos dados da folha de pagamento, os valores líquidos recebidos por {nome} no {trimestre}º trimestre de {ano} foram:"
+            f"{detalhes}\n\n"
+            f"O total líquido no período foi de {total_fmt}. "
+            "Explique isso de forma clara e natural para o usuário."
+        )
+
+        return prompt
+
+    def _filtrar_por_trimestre(self, nome: str, ano: str, trimestre: int) -> pd.DataFrame:
+        meses = range((trimestre - 1) * 3 + 1, trimestre * 3 + 1)
+        meses_str = [f"{m:02d}" for m in meses]
+        competencias = [f"{ano}-{m}" for m in meses_str]
+
+        return self.df[
+            (self.df['name'].str.contains(nome, case=False, na=False)) &
+            (self.df['competency'].isin(competencias))
+        ]
