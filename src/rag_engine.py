@@ -12,12 +12,21 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import re
 from datetime import datetime
+import hashlib
+import pickle
+import pathlib
 
 logger = logging.getLogger(__name__)
 
 
 class PayrollRAGEngine:
     """Motor RAG para consultas de folha de pagamento."""
+
+    def _get_csv_hash(self) -> str:
+        """Gera um hash SHA256 do conteúdo do CSV para controle de cache."""
+        with open(self.csv_path, 'rb') as f:
+            file_hash = hashlib.sha256(f.read()).hexdigest()
+        return file_hash
 
     def __init__(self, csv_path: str, model_name: str = None):
         """
@@ -42,8 +51,20 @@ class PayrollRAGEngine:
         self.df = self._load_and_validate_data()
 
         # Criar chunks e embeddings
-        self.chunks = self._create_chunks()
-        self.embeddings = self._create_embeddings()
+        # self.chunks = self._create_chunks()
+        # self.embeddings = self._create_embeddings()
+        self.cache_dir = pathlib.Path(".rag_cache")
+        self.cache_dir.mkdir(exist_ok=True)
+        self.csv_hash = self._get_csv_hash()
+
+        if self._load_cache():
+            logger.info("Cache carregado com sucesso.")
+        else:
+            logger.info("Cache não encontrado ou desatualizado. Gerando novamente.")
+            self.chunks = self._create_chunks()
+            self.embeddings = self._create_embeddings()
+            self._save_cache()
+
 
         logger.info(f"RAG Engine inicializado com {len(self.chunks)} chunks")
 
@@ -404,3 +425,31 @@ class PayrollRAGEngine:
             (self.df['name'].str.contains(nome, case=False, na=False)) &
             (self.df['competency'].isin(competencias))
         ]
+
+    def _cache_paths(self) -> Tuple[pathlib.Path, pathlib.Path]:
+        """Retorna os caminhos dos arquivos de cache."""
+        chunks_path = self.cache_dir / f"chunks_{self.csv_hash}.pkl"
+        embeddings_path = self.cache_dir / f"embeddings_{self.csv_hash}.npy"
+        return chunks_path, embeddings_path
+
+    def _save_cache(self):
+        """Salva os chunks e embeddings em disco."""
+        chunks_path, embeddings_path = self._cache_paths()
+        with open(chunks_path, "wb") as f:
+            pickle.dump(self.chunks, f)
+        np.save(embeddings_path, self.embeddings)
+        logger.info("Cache salvo com sucesso.")
+
+    def _load_cache(self) -> bool:
+        """Tenta carregar chunks e embeddings do cache."""
+        chunks_path, embeddings_path = self._cache_paths()
+        if chunks_path.exists() and embeddings_path.exists():
+            try:
+                with open(chunks_path, "rb") as f:
+                    self.chunks = pickle.load(f)
+                self.embeddings = np.load(embeddings_path)
+                return True
+            except Exception as e:
+                logger.warning(f"Erro ao carregar cache: {e}")
+                return False
+        return False
